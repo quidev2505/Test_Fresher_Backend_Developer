@@ -107,8 +107,6 @@ export const friendshipRequestRouter = router({
     .input(AnswerFriendshipRequestInputSchema)
     .mutation(async ({ ctx, input }) => {
       await ctx.db.transaction().execute(async (t) => {
-
-
         /**
          * Question 1: Implement api to accept a friendship request
          *
@@ -134,20 +132,6 @@ export const friendshipRequestRouter = router({
          */
 
         //Answer:
-        //[Question 1 / Scenario 2] Update the friendship request to have status `accepted`
-        await t.updateTable('friendships')
-          .set({ status: 'accepted' })
-          .where('friendships.userId', '=', ctx.session.userId)
-          .where('friendships.friendUserId', '=', input.friendUserId)
-          .returningAll()
-          .executeTakeFirst()
-
-        await t.updateTable('friendships')
-          .set({ status: 'accepted' })
-          .where('friendships.userId', '=', input.friendUserId)
-          .where('friendships.friendUserId', '=', ctx.session.userId)
-          .execute()
-
         //[Question 1 / Scenario 1]
         t
           .insertInto('friendships')
@@ -156,7 +140,24 @@ export const friendshipRequestRouter = router({
             friendUserId: input.friendUserId,
             status: 'accepted',
           })
-          .execute()
+          .executeTakeFirst()
+
+        //[Question 1 / Scenario 2] Update the friendship request to have status `accepted`
+        const result = await t.updateTable('friendships')
+          .set({ status: 'accepted' })
+          .where('friendships.userId', '=', ctx.session.userId)
+          .where('friendships.friendUserId', '=', input.friendUserId)
+          .executeTakeFirst()
+
+        if ((await result).numUpdatedRows) {
+          await t.updateTable('friendships')
+            .set({ status: 'accepted' })
+            .where('friendships.userId', '=', input.friendUserId)
+            .where('friendships.friendUserId', '=', ctx.session.userId)
+            .execute()
+        }
+
+
       })
     }),
 
@@ -184,7 +185,6 @@ export const friendshipRequestRouter = router({
         .set({ status: 'declined' })
         .where('status', '=', 'requested')
         .executeTakeFirst()
-
 
       await ctx.db.selectFrom('friendships').select(['friendships.status']).where('status', '=', 'declined').execute()
     }),
