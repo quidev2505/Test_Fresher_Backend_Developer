@@ -132,32 +132,42 @@ export const friendshipRequestRouter = router({
          */
 
         //Answer:
-        //[Question 1 / Scenario 1]
-        t
-          .insertInto('friendships')
-          .values({
-            userId: ctx.session.userId,
-            friendUserId: input.friendUserId,
-            status: 'accepted',
-          })
-          .executeTakeFirst()
-
-        //[Question 1 / Scenario 2] Update the friendship request to have status `accepted`
-        const result = await t.updateTable('friendships')
+        // 1. Update the friendship request to have status`accepted`
+        await t.updateTable('friendships')
           .set({ status: 'accepted' })
-          .where('friendships.userId', '=', ctx.session.userId)
-          .where('friendships.friendUserId', '=', input.friendUserId)
+          .where('status', '=', 'requested')
           .executeTakeFirst()
 
-        if ((await result).numUpdatedRows) {
-          await t.updateTable('friendships')
+        // 2. Create a new friendship request record with the opposite user as the friend
+        const existingFriendship = await t.selectFrom('friendships')
+          .selectAll()
+          .where('userId', '=', ctx.session.userId)
+          .where('friendUserId', '=', input.friendUserId)
+          .executeTakeFirst();
+
+        if (!existingFriendship) {
+          await t.insertInto('friendships')
+            .values({
+              userId: ctx.session.userId,
+              friendUserId: input.friendUserId,
+              status: 'accepted',
+            })
+            .executeTakeFirst();
+        } else {
+          const result = await t.updateTable('friendships')
             .set({ status: 'accepted' })
-            .where('friendships.userId', '=', input.friendUserId)
-            .where('friendships.friendUserId', '=', ctx.session.userId)
-            .execute()
+            .where('friendships.userId', '=', ctx.session.userId)
+            .where('friendships.friendUserId', '=', input.friendUserId)
+            .executeTakeFirst()
+
+          if ((await result).numUpdatedRows) {
+            await t.updateTable('friendships')
+              .set({ status: 'accepted' })
+              .where('friendships.userId', '=', input.friendUserId)
+              .where('friendships.friendUserId', '=', ctx.session.userId)
+              .execute()
+          }
         }
-
-
       })
     }),
 
@@ -180,12 +190,15 @@ export const friendshipRequestRouter = router({
        */
 
       //Answer:
-      //Question 2 / Scenario 1]
+      //[Question 2 / Scenario 1]
       await ctx.db.updateTable('friendships')
         .set({ status: 'declined' })
         .where('status', '=', 'requested')
         .executeTakeFirst()
 
-      await ctx.db.selectFrom('friendships').select(['friendships.status']).where('status', '=', 'declined').execute()
+      await ctx.db.selectFrom('friendships')
+        .select(['friendships.status'])
+        .where('status', '=', 'declined')
+        .execute()
     }),
 })
